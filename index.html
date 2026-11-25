@@ -44,6 +44,11 @@ html,body{margin:0;padding:0;height:100%;background:var(--bg);color:var(--text);
 @keyframes ledBlink{0%,100%{opacity:1;} 50%{opacity:.25;}}
 @keyframes ledTick{0%{transform:scale(1.6); opacity:.65;} 100%{transform:scale(1); opacity:1;}}
 #btnSymbol{font-weight:700; letter-spacing:.3px;}
+#btnFav{font-size:15px; padding:3px 8px; line-height:1;}
+#btnFav.fav{color:#f5a623;}
+#symList .symStar{font-size:18px; padding:0 4px; color:var(--muted); line-height:1;}
+#symList .symStar.on{color:#f5a623;}
+#symList .symHead{padding:6px 14px; font-size:11px; font-weight:700; color:var(--muted); background:var(--panel2); letter-spacing:.4px;}
 #symPicker{position:fixed; inset:0; z-index:9999; background:rgba(0,0,0,.55); display:none; align-items:flex-start; justify-content:center; padding-top:7vh;}
 #symPicker.open{display:flex;}
 #symBox{background:var(--panel); color:var(--text); border:1px solid var(--border); border-radius:10px; width:min(420px,94vw); max-height:80vh; display:flex; flex-direction:column; overflow:hidden;}
@@ -146,6 +151,7 @@ canvas{display:block; touch-action:none;}
   <div id="topbar">
     <span class="brand">ANKIT</span>
     <button class="chip-btn" id="btnSymbol">BTCUSDT.P ▾</button>
+    <button class="chip-btn" id="btnFav" title="Add/remove favourite">☆</button>
     <select id="symbolSelect" style="display:none"></select>
     <div class="dropdown-wrap">
       <button class="chip-btn" id="btnIndicators">📊 Indicators</button>
@@ -211,7 +217,8 @@ canvas{display:block; touch-action:none;}
     <h4>Auto Box Sizing (ATR-daily)</h4>
     <div class="row">ATR Period <input type="number" id="boxAtrPeriod" value="5" min="1" step="1"></div>
     <div class="row">Brick Divisor <input type="number" id="boxDivisor" value="36" min="1" step="1"></div>
-    <div style="font-size:11px; color:var(--muted); padding:2px 0 6px;">Renko Line size = ATR(period) on the 1-day chart. Renko brick size = that ÷ divisor. Only applies while box size hasn't been manually edited above.</div>
+    <div class="row">Line Divisor <input type="number" id="rlDivisor" value="12" min="1" step="1"></div>
+    <div style="font-size:11px; color:var(--muted); padding:2px 0 6px;">Renko brick size = ATR(period) on the 1-day chart ÷ Brick Divisor. Renko Line size = same ATR ÷ Line Divisor (smaller divisor = slower, wider line). Only applies while box size hasn't been manually edited above.</div>
 
     <h4>Supertrend</h4>
     <div class="row">Source
@@ -391,7 +398,7 @@ const state = {
   settings: {
     renkoMode: 'pct', renkoSize: 0.1,                 // Renko CHART (ClassicRenko) box size
     rlMode: 'pct', rlSize: 0.1,                        // Renko LINE overlay (RenkoEngine) box size — independent of the chart above
-    boxAtrPeriod: 7, boxDivisor: 46,                   // ATR-daily auto box-sizing: Renko Line = ATR(period)-daily, Renko brick = that / divisor
+    boxAtrPeriod: 7, boxDivisor: 46, rlDivisor: 12,                  // ATR-daily auto box-sizing: Renko Line = ATR(period)-daily, Renko brick = that / divisor
     zlSource: 'hlc3', zlPeriod: 55,                    // period3 default 55
     siTenkanPeriod: 9, siTenkanMult: 2.0, siKijunPeriod: 26, siKijunMult: 4.0,
     ichiConv: 9, ichiBase: 26, ichiSpanB: 52, ichiDisplacement: 26,
@@ -2570,6 +2577,22 @@ function buildTfSelect(){
 }
 
 const PINNED_SYMBOLS = ['BTCUSDT.P','ETHUSDT.P','SOLUSDT.P','BNBUSDT.P','XRPUSDT.P','DOGEUSDT.P','XAUUSDT.P','XAGUSDT.P'];
+const FAV_KEY = 'ankit_fav_syms_v1';
+let favSymbols = [];
+try{ const f = JSON.parse(localStorage.getItem(FAV_KEY) || '[]'); if (Array.isArray(f)) favSymbols = f.filter(x => typeof x === 'string'); }catch(e){}
+function saveFavs(){ try{ localStorage.setItem(FAV_KEY, JSON.stringify(favSymbols)); }catch(e){} }
+function isFav(sym){ return favSymbols.includes(sym); }
+function toggleFav(sym){
+  const i = favSymbols.indexOf(sym);
+  if (i >= 0) favSymbols.splice(i,1); else favSymbols.push(sym);
+  saveFavs(); updateFavButton(); renderSymbolList();
+}
+function updateFavButton(){
+  const b = document.getElementById('btnFav'); if (!b) return;
+  const f = isFav(state.symbol);
+  b.textContent = f ? '★' : '☆';
+  b.classList.toggle('fav', f);
+}
 function currentSymbolList(){
   const all = Object.keys(CFG.symbolMarket);
   const pinned = PINNED_SYMBOLS.filter(s => CFG.symbolMarket[s]);
@@ -2579,6 +2602,7 @@ function currentSymbolList(){
 function updateSymbolButton(){
   const b = document.getElementById('btnSymbol');
   if (b) b.textContent = state.symbol + ' ▾';
+  updateFavButton();
 }
 function buildSymbolSelect(){
   const sel = document.getElementById('symbolSelect');
@@ -2593,11 +2617,21 @@ function renderSymbolList(){
   const box = document.getElementById('symList'); if (!box) return;
   const q = (document.getElementById('symSearch').value || '').trim().toUpperCase();
   const all = currentSymbolList();
-  const hits = q ? all.filter(s => s.includes(q)) : all;
-  const shown = hits.slice(0, 400);
-  document.getElementById('symCount').textContent = `${hits.length} perpetual futures` + (hits.length>shown.length ? ' — type to narrow down' : '');
-  box.innerHTML = shown.map(s => `<div class="symRow${s===state.symbol?' sel':''}" data-sym="${s}"><span>${s.replace(/\.P$/,'')}</span><small>Perp</small></div>`).join('')
-    || '<div class="symRow">No match</div>';
+  const favs = favSymbols.filter(f => CFG.symbolMarket[f]).sort();
+  const rowHtml = s => `<div class="symRow${s===state.symbol?' sel':''}" data-sym="${s}"><span>${s.replace(/\.P$/,'')}</span><span class="symStar${isFav(s)?' on':''}" data-star="${s}">${isFav(s)?'★':'☆'}</span></div>`;
+  let html = '', total;
+  if (q){
+    const hits = all.filter(x => x.includes(q));
+    total = hits.length;
+    html = hits.slice(0,400).map(rowHtml).join('');
+  } else {
+    const rest = all.filter(x => !isFav(x));
+    total = all.length;
+    if (favs.length) html += '<div class="symHead">★ Favourites</div>' + favs.map(rowHtml).join('') + '<div class="symHead">All perpetuals</div>';
+    html += rest.slice(0,400).map(rowHtml).join('');
+  }
+  document.getElementById('symCount').textContent = `${total} perpetual futures` + (!q && total>400+favs.length ? ' — type to search' : '');
+  box.innerHTML = html || '<div class="symRow">No match</div>';
 }
 function openSymbolPicker(){
   const pk = document.getElementById('symPicker');
@@ -2609,9 +2643,12 @@ function openSymbolPicker(){
 function closeSymbolPicker(){ document.getElementById('symPicker').classList.remove('open'); }
 function bindSymbolPicker(){
   document.getElementById('btnSymbol').onclick = openSymbolPicker;
+  document.getElementById('btnFav').onclick = ()=> toggleFav(state.symbol);
   document.getElementById('symSearch').oninput = renderSymbolList;
   document.getElementById('symPicker').addEventListener('click', e=>{
     if (e.target.id === 'symPicker'){ closeSymbolPicker(); return; }
+    const star = e.target.closest('.symStar');
+    if (star){ e.stopPropagation(); toggleFav(star.dataset.star); return; } // star only toggles favourite, doesn't switch chart
     const row = e.target.closest('.symRow');
     if (!row || !row.dataset.sym) return;
     closeSymbolPicker();
@@ -2788,7 +2825,7 @@ function bindUI(){
   const settingsInputs = {
     renkoMode:'renkoMode', renkoSize:'renkoSize',
     rlMode:'rlMode', rlSize:'rlSize',
-    boxAtrPeriod:'boxAtrPeriod', boxDivisor:'boxDivisor',
+    boxAtrPeriod:'boxAtrPeriod', boxDivisor:'boxDivisor', rlDivisor:'rlDivisor',
     stPeriod:'stPeriod', stMult:'stMult', stSource:'stSource', stLineWidth:'stLineWidth', stLineStyle:'stLineStyle',
     siTenkanPeriod:'siTenkanPeriod', siTenkanMult:'siTenkanMult',
     siKijunPeriod:'siKijunPeriod', siKijunMult:'siKijunMult', siLineWidth:'siLineWidth', siLineStyle:'siLineStyle',
@@ -2800,7 +2837,7 @@ function bindUI(){
       const val = el.type==='number' ? parseFloat(el.value) : el.value;
       state.settings[key] = val;
       if (key==='renkoSize' || key==='rlSize') state.userSetRenkoSize = true; // manual edit — stop ATR-daily auto-sizing from overriding it
-      if (key==='boxAtrPeriod' || key==='boxDivisor'){
+      if (key==='boxAtrPeriod' || key==='boxDivisor' || key==='rlDivisor'){
         // Changing the auto-sizing inputs themselves should recompute immediately, even if
         // a box size was previously manually edited — that's the whole point of this control.
         state.userSetRenkoSize = false;
@@ -2943,7 +2980,7 @@ async function applyAtrRenkoSizing(){
     const atrVal = atr[atr.length-1];
     if (!atrVal || !isFinite(atrVal) || atrVal <= 0) return;
 
-    const rlSize = atrVal;
+    const rlSize = atrVal / (state.settings.rlDivisor || 12); // full-ATR box made the line jump once a day and sit far outside the visible range
     const brickSize = atrVal / (state.settings.boxDivisor || 36);
 
     state.settings.rlMode = 'fixed';
@@ -3135,7 +3172,7 @@ function syncUIFromState(){
   document.getElementById('btnEMA').classList.toggle('active', !!state.indicators.emaOn);
   document.getElementById('btnSessionBreaks').classList.toggle('active', !!state.indicators.sessionBreaks);
   const map = { renkoMode:'renkoMode', renkoSize:'renkoSize', rlMode:'rlMode', rlSize:'rlSize',
-    boxAtrPeriod:'boxAtrPeriod', boxDivisor:'boxDivisor',
+    boxAtrPeriod:'boxAtrPeriod', boxDivisor:'boxDivisor', rlDivisor:'rlDivisor',
     stPeriod:'stPeriod', stMult:'stMult', stSource:'stSource', stLineWidth:'stLineWidth', stLineStyle:'stLineStyle',
     siTenkanPeriod:'siTenkanPeriod', siTenkanMult:'siTenkanMult', siKijunPeriod:'siKijunPeriod', siKijunMult:'siKijunMult',
     siLineWidth:'siLineWidth', siLineStyle:'siLineStyle',
