@@ -1,2 +1,2 @@
-# Stock-Screener-
+# Renko Terminal-
 F&amp;O STOCKS
