@@ -270,15 +270,27 @@ canvas{display:block; touch-action:none;}
     <div class="row">EMA 1 On <input type="checkbox" id="ema0On" checked></div>
     <div class="row">EMA 1 Period <input type="number" id="ema0Period" value="9" min="0" step="1"></div>
     <div class="row">EMA 1 Color <input type="color" id="ema0Color" value="#f5a623"></div>
+    <div class="row">EMA 1 Thickness <input type="number" id="ema0Width" value="1.3" step="0.1" min="0.5" max="8"></div>
+    <div class="row">EMA 1 Style <select id="ema0Style"><option value="solid">Solid</option><option value="dashed">Dashed</option><option value="dotted">Dotted</option></select></div>
     <div class="row">EMA 2 On <input type="checkbox" id="ema1On" checked></div>
     <div class="row">EMA 2 Period <input type="number" id="ema1Period" value="20" min="0" step="1"></div>
     <div class="row">EMA 2 Color <input type="color" id="ema1Color" value="#3b82f6"></div>
+    <div class="row">EMA 2 Thickness <input type="number" id="ema1Width" value="1.3" step="0.1" min="0.5" max="8"></div>
+    <div class="row">EMA 2 Style <select id="ema1Style"><option value="solid">Solid</option><option value="dashed">Dashed</option><option value="dotted">Dotted</option></select></div>
     <div class="row">EMA 3 On <input type="checkbox" id="ema2On" checked></div>
     <div class="row">EMA 3 Period <input type="number" id="ema2Period" value="50" min="0" step="1"></div>
     <div class="row">EMA 3 Color <input type="color" id="ema2Color" value="#a78bfa"></div>
+    <div class="row">EMA 3 Thickness <input type="number" id="ema2Width" value="1.3" step="0.1" min="0.5" max="8"></div>
+    <div class="row">EMA 3 Style <select id="ema2Style"><option value="solid">Solid</option><option value="dashed">Dashed</option><option value="dotted">Dotted</option></select></div>
     <div class="row">EMA 4 On <input type="checkbox" id="ema3On" checked></div>
     <div class="row">EMA 4 Period <input type="number" id="ema3Period" value="200" min="0" step="1"></div>
     <div class="row">EMA 4 Color <input type="color" id="ema3Color" value="#dc2626"></div>
+    <div class="row">EMA 4 Thickness <input type="number" id="ema3Width" value="1.3" step="0.1" min="0.5" max="8"></div>
+    <div class="row">EMA 4 Style <select id="ema3Style"><option value="solid">Solid</option><option value="dashed">Dashed</option><option value="dotted">Dotted</option></select></div>
+    <div class="row">Fill between EMA 1 &amp; EMA 2 <input type="checkbox" id="emaFillOn"></div>
+    <div class="row">Fill when EMA 1 above <input type="color" id="colorEmaFillUp" value="#089981"></div>
+    <div class="row">Fill when EMA 1 below <input type="color" id="colorEmaFillDown" value="#f23645"></div>
+    <div class="row">Fill Opacity % <input type="number" id="emaFillOpacity" value="20" min="0" max="100" step="5"></div>
 
     <h4>Session Breaks</h4>
     <div style="font-size:11px; color:var(--muted); padding:2px 0 6px;">Vertical dashed line every N hours, plus any custom daily times you add below. All times are IST (India Standard Time).</div>
@@ -401,7 +413,7 @@ const state = {
   draggingDrawing: null, // same shape, set only while actively being dragged (long-press/mouse-grab)
   indicators: {
     emaOn: false,
-    ema: [ { period:9, color:'#f5a623', on:true }, { period:20, color:'#3b82f6', on:true }, { period:50, color:'#a78bfa', on:true }, { period:200, color:'#dc2626', on:true } ],
+    ema: [ { period:9, color:'#f5a623', on:true, width:1.3, style:'solid' }, { period:20, color:'#3b82f6', on:true, width:1.3, style:'solid' }, { period:50, color:'#a78bfa', on:true, width:1.3, style:'solid' }, { period:200, color:'#dc2626', on:true, width:1.3, style:'solid' } ],
     ichimoku: false,
     alligator: false,
     fractals: false,
@@ -418,12 +430,13 @@ const state = {
     zlSource: 'hlc3', zlPeriod: 55,                    // period3 default 55
     alJawLen: 13, alJawOff: 8, alTeethLen: 8, alTeethOff: 5, alLipsLen: 5, alLipsOff: 3, alLineWidth: 1.5, // Williams Alligator (SMMA of hl2, forward-shifted)
     frN: 2,                                            // Williams Fractals — bars each side
+    emaFillOn: false, emaFillOpacity: 20,              // shaded area between EMA 1 and EMA 2
     ichiConv: 9, ichiBase: 26, ichiSpanB: 52, ichiDisplacement: 26,
     rzPct: 0.015, rzAbs: 0.05, rzAtrMult: 2.8, rzAvgLen: 5, rzAtrLen: 5, // presetPct/presetATR/customAbs/avgLen/atrLen (Low preset)
     rzLevelExtend: 10,                                 // levelExtend — how many bars the core/outer boxes extend right
     stPeriod: 10, stMult: 3.0, stSource: 'close',       // classic Supertrend defaults
     boLookback: 20, boSample: 200,
-    colors: { up: '#089981', down: '#f23645', renkoLine: '#2962ff', alJaw: '#2962ff', alTeeth: '#e91e63', alLips: '#66bb6a', frUp: '#f23645', frDown: '#089981', drawLine: '#f5a623', sessionBreak: '#787b86' }, // user-customizable chart colors
+    colors: { up: '#089981', down: '#f23645', renkoLine: '#2962ff', alJaw: '#2962ff', alTeeth: '#e91e63', alLips: '#66bb6a', frUp: '#f23645', frDown: '#089981', emaFillUp: '#089981', emaFillDown: '#f23645', drawLine: '#f5a623', sessionBreak: '#787b86' }, // user-customizable chart colors
     sbIntervalHours: 1, // session-break vertical line every N hours (only used when sbIntervalEnabled is true)
     sbIntervalEnabled: true, // turn the N-hour interval lines on/off independently of custom times
     sbCustomTimes: [], // extra daily times, "HH:MM" 24h local, e.g. ["09:15","15:30"]
@@ -2101,16 +2114,50 @@ const Overlays = {
     }
   },
   drawEMAOnRenko(ctx, bricks, startIdx, endIdx, xToPx, yToPx){
-    for (const line of state.indicators.ema){
+    const emas = state.indicators.ema;
+    // ---- shaded area between EMA 1 and EMA 2 (drawn first, so the lines sit on top of it) ----
+    const st = state.settings;
+    if (st.emaFillOn && emas[0] && emas[1] && emas[0].on !== false && emas[1].on !== false){
+      const A = Indicators.emaRenko[emas[0].period], B = Indicators.emaRenko[emas[1].period];
+      if (A && B){
+        const up = new Path2D(), dn = new Path2D();
+        const poly = (path, pts) => { path.moveTo(pts[0][0], pts[0][1]); for (let k=1;k<pts.length;k++) path.lineTo(pts[k][0], pts[k][1]); path.closePath(); };
+        for (let i=Math.max(startIdx,1);i<=endIdx;i++){
+          const a0=A[i-1], b0=B[i-1], a1=A[i], b1=B[i];
+          if (a0==null || b0==null || a1==null || b1==null) continue;
+          const x0=xToPx(i-1), x1=xToPx(i);
+          const ya0=yToPx(a0), yb0=yToPx(b0), ya1=yToPx(a1), yb1=yToPx(b1);
+          const d0=a0-b0, d1=a1-b1;
+          if (d0*d1 >= 0){
+            poly((d0+d1) >= 0 ? up : dn, [[x0,ya0],[x1,ya1],[x1,yb1],[x0,yb0]]);
+          } else { // the two EMAs cross inside this step: split at the crossing so each side gets its own colour
+            const t = d0/(d0-d1), xc = x0+(x1-x0)*t, yc = ya0+(ya1-ya0)*t;
+            poly(d0 >= 0 ? up : dn, [[x0,ya0],[xc,yc],[x0,yb0]]);
+            poly(d1 >= 0 ? up : dn, [[xc,yc],[x1,ya1],[x1,yb1]]);
+          }
+        }
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, Math.min(100, st.emaFillOpacity==null ? 20 : st.emaFillOpacity)) / 100;
+        ctx.fillStyle = st.colors.emaFillUp;   ctx.fill(up);
+        ctx.fillStyle = st.colors.emaFillDown; ctx.fill(dn);
+        ctx.restore();
+      }
+    }
+    // ---- the lines: each EMA has its own colour / thickness / style ----
+    for (const line of emas){
       if (line.on === false) continue;
       const arr = Indicators.emaRenko[line.period]; if (!arr) continue;
-      ctx.strokeStyle = line.color; ctx.lineWidth=1.3; ctx.beginPath(); let started=false;
+      ctx.save();
+      ctx.strokeStyle = line.color;
+      applyLineStyle(ctx, line.width || 1.3, line.style || 'solid');
+      ctx.beginPath(); let started=false;
       for (let i=startIdx;i<=endIdx;i++){
         const v = arr[i]; if (v==null) continue; // arr is full-array-indexed (same as supertrendRenko)
         const x=xToPx(i), y=yToPx(v);
         if (!started){ ctx.moveTo(x,y); started=true; } else ctx.lineTo(x,y);
       }
       ctx.stroke();
+      ctx.restore();
     }
   },
   drawIchimokuBg(ctx, startIdx, endIdx, xToPx, yToPx){
@@ -2734,7 +2781,14 @@ function bindUI(){
       line.color = cEl.value;
       saveLayout(); Render.draw();
     };
+    const wEl = document.getElementById(`ema${i}Width`), stEl = document.getElementById(`ema${i}Style`);
+    if (wEl) wEl.onchange = ()=>{ line.width = Math.max(0.5, parseFloat(wEl.value) || 1.3); saveLayout(); Render.draw(); };
+    if (stEl) stEl.onchange = ()=>{ line.style = stEl.value; saveLayout(); Render.draw(); };
   });
+  // ---- fill between EMA 1 & EMA 2 ----
+  const fOn = document.getElementById('emaFillOn'), fOp = document.getElementById('emaFillOpacity');
+  if (fOn) fOn.onchange = ()=>{ state.settings.emaFillOn = fOn.checked; saveLayout(); Render.draw(); };
+  if (fOp) fOp.onchange = ()=>{ state.settings.emaFillOpacity = Math.max(0, Math.min(100, parseFloat(fOp.value) || 0)); saveLayout(); Render.draw(); };
 
   // ---- Session Breaks: interval hours + custom daily times ----
   document.getElementById('sbIntervalEnabled').onchange = e=>{
@@ -2788,7 +2842,7 @@ function bindUI(){
     saveLayout();
     Render.draw();
   };
-  const colorInputs = { colorUp:'up', colorDown:'down', colorRenkoLine:'renkoLine', colorDrawLine:'drawLine', colorAlJaw:'alJaw', colorAlTeeth:'alTeeth', colorAlLips:'alLips', colorFrUp:'frUp', colorFrDown:'frDown' };
+  const colorInputs = { colorUp:'up', colorDown:'down', colorRenkoLine:'renkoLine', colorDrawLine:'drawLine', colorAlJaw:'alJaw', colorAlTeeth:'alTeeth', colorAlLips:'alLips', colorFrUp:'frUp', colorFrDown:'frDown', colorEmaFillUp:'emaFillUp', colorEmaFillDown:'emaFillDown' };
   Object.entries(colorInputs).forEach(([elId,key])=>{
     document.getElementById(elId).onchange = e=>{
       state.settings.colors[key] = e.target.value;
@@ -2797,11 +2851,12 @@ function bindUI(){
     };
   });
   document.getElementById('btnResetColors').onclick = ()=>{
-    state.settings.colors = { up: '#089981', down: '#f23645', renkoLine: '#2962ff', alJaw: '#2962ff', alTeeth: '#e91e63', alLips: '#66bb6a', frUp: '#f23645', frDown: '#089981' };
+    state.settings.colors = { up: '#089981', down: '#f23645', renkoLine: '#2962ff', alJaw: '#2962ff', alTeeth: '#e91e63', alLips: '#66bb6a', frUp: '#f23645', frDown: '#089981', emaFillUp: '#089981', emaFillDown: '#f23645' };
     state.settings.lineWidth = 1.6; state.settings.lineStyle = 'solid';
     state.settings.stLineWidth = 1.8; state.settings.stLineStyle = 'solid';
     state.settings.alLineWidth = 1.5;
-    state.indicators.ema = [ { period:9, color:'#f5a623', on:true }, { period:20, color:'#3b82f6', on:true }, { period:50, color:'#a78bfa', on:true }, { period:200, color:'#dc2626', on:true } ];
+    state.indicators.ema = [ { period:9, color:'#f5a623', on:true, width:1.3, style:'solid' }, { period:20, color:'#3b82f6', on:true, width:1.3, style:'solid' }, { period:50, color:'#a78bfa', on:true, width:1.3, style:'solid' }, { period:200, color:'#dc2626', on:true, width:1.3, style:'solid' } ];
+    state.settings.emaFillOn = false; state.settings.emaFillOpacity = 20;
     syncUIFromState();
     saveLayout();
     Indicators.recompute();
@@ -3052,11 +3107,18 @@ function syncUIFromState(){
   document.getElementById('colorAlLips').value = state.settings.colors.alLips;
   document.getElementById('colorFrUp').value = state.settings.colors.frUp;
   document.getElementById('colorFrDown').value = state.settings.colors.frDown;
+  document.getElementById('colorEmaFillUp').value = state.settings.colors.emaFillUp;
+  document.getElementById('colorEmaFillDown').value = state.settings.colors.emaFillDown;
+  document.getElementById('emaFillOn').checked = !!state.settings.emaFillOn;
+  document.getElementById('emaFillOpacity').value = state.settings.emaFillOpacity;
   state.indicators.ema.forEach((line, i)=>{
     const oEl = document.getElementById(`ema${i}On`), pEl = document.getElementById(`ema${i}Period`), cEl = document.getElementById(`ema${i}Color`);
     if (oEl) oEl.checked = line.on !== false;
     if (pEl) pEl.value = line.period;
     if (cEl) cEl.value = line.color;
+    const wEl = document.getElementById(`ema${i}Width`), stEl = document.getElementById(`ema${i}Style`);
+    if (wEl) wEl.value = line.width || 1.3;
+    if (stEl) stEl.value = line.style || 'solid';
   });
   document.getElementById('darkModeToggle').checked = state.theme==='dark';
   document.documentElement.classList.toggle('dark', state.theme==='dark');
