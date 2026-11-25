@@ -36,9 +36,24 @@ html,body{margin:0;padding:0;height:100%;background:var(--bg);color:var(--text);
   border-radius:6px; padding:5px 6px; font-size:12px;}
 #tfSelect{min-width:66px;}
 .spacer{flex:1;}
-.led{width:11px;height:11px;border-radius:50%;background:var(--red); box-shadow:0 0 8px var(--red); display:inline-block; animation:ledBlink 1.4s ease-in-out infinite;}
-.led.live{background:var(--green); box-shadow:0 0 8px var(--green);}
-@keyframes ledBlink{0%,100%{opacity:1;} 50%{opacity:.35;}}
+.led{width:11px;height:11px;border-radius:50%;background:var(--red); box-shadow:0 0 8px var(--red); display:inline-block; animation:ledBlink .7s ease-in-out infinite;}
+/* offline = red, fast blink | connecting/loading = amber, slow blink | live = solid green (pulses on every incoming tick) */
+.led.loading{background:#f5a623; box-shadow:0 0 8px #f5a623; animation:ledBlink 1.2s ease-in-out infinite;}
+.led.live{background:var(--green); box-shadow:0 0 8px var(--green); animation:none; opacity:1;}
+.led.live.tick{animation:ledTick .3s ease-out;}
+@keyframes ledBlink{0%,100%{opacity:1;} 50%{opacity:.25;}}
+@keyframes ledTick{0%{transform:scale(1.6); opacity:.65;} 100%{transform:scale(1); opacity:1;}}
+#btnSymbol{font-weight:700; letter-spacing:.3px;}
+#symPicker{position:fixed; inset:0; z-index:9999; background:rgba(0,0,0,.55); display:none; align-items:flex-start; justify-content:center; padding-top:7vh;}
+#symPicker.open{display:flex;}
+#symBox{background:var(--panel); color:var(--text); border:1px solid var(--border); border-radius:10px; width:min(420px,94vw); max-height:80vh; display:flex; flex-direction:column; overflow:hidden;}
+#symSearch{margin:10px; padding:9px 10px; font-size:14px; background:var(--panel2); color:var(--text); border:1px solid var(--border); border-radius:6px; outline:none;}
+#symCount{font-size:11px; color:var(--muted); padding:0 12px 6px;}
+#symList{overflow-y:auto; flex:1; -webkit-overflow-scrolling:touch;}
+#symList .symRow{padding:10px 14px; font-size:13px; border-top:1px solid var(--border); cursor:pointer; display:flex; justify-content:space-between;}
+#symList .symRow:active, #symList .symRow.sel{background:var(--accent); color:#fff;}
+#symList .symRow small{color:var(--muted); font-size:11px;}
+#symList .symRow.sel small, #symList .symRow:active small{color:#fff;}
 #status{font-size:11px; color:var(--muted); display:flex; align-items:center;}
 
 /* ===== MAIN AREA ===== */
@@ -121,11 +136,17 @@ canvas{display:block; touch-action:none;}
 </style>
 </head>
 <body>
+<div id="symPicker"><div id="symBox">
+  <input id="symSearch" type="text" placeholder="Search futures (BTC, DOGE, XAU...)" autocomplete="off" autocapitalize="characters" spellcheck="false">
+  <div id="symCount"></div>
+  <div id="symList"></div>
+</div></div>
 <div id="app">
 
   <div id="topbar">
     <span class="brand">ANKIT</span>
-    <select id="symbolSelect"></select>
+    <button class="chip-btn" id="btnSymbol">BTCUSDT.P ▾</button>
+    <select id="symbolSelect" style="display:none"></select>
     <div class="dropdown-wrap">
       <button class="chip-btn" id="btnIndicators">📊 Indicators</button>
     </div>
@@ -290,12 +311,12 @@ const CFG = {
   // Key = dropdown id. A trailing ".P" means the Binance USDT-M perpetual FUTURES contract of
   // the same pair (TradingView-style); keys without it are SPOT, except XAU/XAG which only
   // exist as futures on Binance.
+  // Futures-only build: every key is a Binance USDT-M / USDC-M PERPETUAL contract written as
+  // "<SYMBOL>.P". This small list is only the offline fallback — the full list of every TRADING
+  // perpetual is pulled live from /fapi/v1/exchangeInfo at startup (and cached for 6h).
   symbolMarket: {
-    BTCUSDT: 'spot', 'BTCUSDT.P': 'futures',
-    ETHUSDT: 'spot', 'ETHUSDT.P': 'futures',
-    SOLUSDT: 'spot', 'SOLUSDT.P': 'futures',
-    PAXGUSDT: 'spot', 'PAXGUSDT.P': 'futures',
-    XAUUSDT: 'futures', XAGUSDT: 'futures'
+    'BTCUSDT.P':'futures','ETHUSDT.P':'futures','SOLUSDT.P':'futures','BNBUSDT.P':'futures',
+    'XRPUSDT.P':'futures','DOGEUSDT.P':'futures','XAUUSDT.P':'futures','XAGUSDT.P':'futures'
   },
   nativeIntervals: ['1s','1m','3m','5m','15m','30m','1h','2h','4h','6h','1d'],
   tfMs: {
@@ -316,17 +337,16 @@ const CFG = {
   restLimitCap: 1000,
 };
 function displaySymbol(sym){
-  const base = sym.replace(/\.P$/, '');
-  return base + ' ' + (CFG.symbolMarket[sym]==='futures' ? 'Futures' : 'Spot');
+  return sym.replace(/\.P$/, '') + ' Futures';
 }
 
-function marketFor(displaySymbol){ return CFG.symbolMarket[displaySymbol] || 'spot'; }
+function marketFor(displaySymbol){ return 'futures'; } // futures-only build
 function restBaseFor(displaySymbol){ return marketFor(displaySymbol)==='futures' ? CFG.futuresRestBase : CFG.spotRestBase; }
 function wsBaseFor(displaySymbol){ return marketFor(displaySymbol)==='futures' ? CFG.futuresWsBase : CFG.spotWsBase; }
 function klinesPathFor(displaySymbol){ return marketFor(displaySymbol)==='futures' ? '/fapi/v1/klines' : '/api/v3/klines'; }
 
 const state = {
-  symbol: 'BTCUSDT',
+  symbol: 'BTCUSDT.P',
   tf: '1m',
   baseInterval: '1m',      // native binance interval used as aggregation source
   chartType: 'renko',      // renko-only build — candlestick view removed per request
@@ -566,6 +586,57 @@ async function resyncHistory(){
   } catch(e){ console.error('resync failed', e); }
 }
 
+/* ---- Live/offline LED truth source ----
+   Old bug: closing the previous symbol's socket fired its onclose AFTER the new socket had
+   already opened, so the LED went red (and wsFailCount crept up toward the polling fallback)
+   while the new feed was perfectly live. Also "socket open" was treated as "live" even when no
+   data arrived. Now: stale sockets are detached before closing, and green really means data is
+   flowing (or the socket is open and Binance REST is reachable on a quiet market). */
+let lastDataAt = 0, openAt = 0, lastFlashAt = 0, lastPingAt = 0, watchdogBusy = false;
+function dropWS(w){
+  if (!w) return;
+  w.onopen = w.onclose = w.onerror = w.onmessage = null;
+  try{ w.close(); }catch(e){}
+}
+function flashLeds(){
+  ['ledDot','ledDotFs'].forEach(id=>{
+    const el = document.getElementById(id);
+    if (el){ el.classList.remove('tick'); void el.offsetWidth; el.classList.add('tick'); }
+  });
+}
+function noteData(){
+  const now = Date.now();
+  lastDataAt = now;
+  if (!state.wsConnected) setStatus(true, `live: ${displaySymbol(state.symbol)} @ ${state.tf}`);
+  if (now - lastFlashAt > 400){ lastFlashAt = now; flashLeds(); }
+}
+async function feedWatchdog(){
+  if (watchdogBusy) return;
+  const open = (state.ws && state.ws.readyState===1) || !!pollTimer;
+  if (!open) return;
+  const now = Date.now();
+  const age = now - Math.max(lastDataAt, openAt);
+  if (age < 8000) return;                 // data (or a fresh connect) within 8s — nothing to check
+  if (now - lastPingAt < 8000) return;
+  lastPingAt = now;
+  watchdogBusy = true;
+  try{
+    const r = await fetch(CFG.futuresRestBase + '/fapi/v1/time', {cache:'no-store'});
+    if (!r.ok) throw new Error('ping ' + r.status);
+    // Network + Binance reachable and socket open: market is just quiet -> that's still "live".
+    if (!state.wsConnected) setStatus(true, `live: ${displaySymbol(state.symbol)} (quiet)`);
+    // Socket open but dead silent for a full minute = zombie connection -> rebuild it.
+    if (state.ws && state.ws.readyState===1 && age > 60000){
+      openAt = Date.now(); reconnectDelay = 1000; connectWS();
+    }
+  } catch(e){
+    setStatus(false, 'offline — no data');
+  } finally { watchdogBusy = false; }
+}
+setInterval(feedWatchdog, 3000);
+window.addEventListener('offline', ()=> setStatus(false, 'offline — no internet'));
+window.addEventListener('online', ()=>{ reconnectDelay = 1000; setStatus(false, 'connecting…'); connectWS(); });
+
 let reconnectTimer = null;
 let reconnectDelay = 1000;
 let wsFailCount = 0;
@@ -594,7 +665,7 @@ function startPollFallback(){
       pendingBar = fresh[fresh.length-1];
       scheduleUpdate();
       pollFailCount = 0;
-      setStatus(true, `live (polling fallback): ${state.symbol} @ ${state.baseInterval}`);
+      noteData();
     } catch(e){
       pollFailCount++;
       setStatus(false, `offline — poll failed (${pollFailCount})`);
@@ -614,6 +685,7 @@ function stopPollFallback(){
 let fastDrawQueued = false, lastFastDraw = 0, indDirty = false;
 function onTick(price, t){
   if (!isFinite(price)) return;
+  noteData();
   state.livePrice = price;
   const lc = ClassicRenko.lastClose, rc = RenkoEngine.lastClose;
   const tt = t || Date.now();
@@ -676,7 +748,7 @@ function connectWS(){
     return;
   }
   connectTickWS(); // minute TFs: kline socket for candles + parallel tick socket for Renko/price
-  if (state.ws){ try{ state.ws.close(); }catch(e){} state.ws = null; }
+  dropWS(state.ws); state.ws = null;
   if (reconnectTimer){ clearTimeout(reconnectTimer); reconnectTimer=null; }
   const sym = apiSymbol(state.symbol).toLowerCase();
   const stream = `${sym}@kline_${state.baseInterval}`;
@@ -687,14 +759,17 @@ function connectWS(){
   state.ws = ws;
 
   ws.onopen = () => {
+    if (state.ws !== ws) return;
     stopPollFallback();
-    setStatus(true, `live: ${displaySymbol(state.symbol)} @ ${state.baseInterval}`);
+    openAt = Date.now(); lastDataAt = 0;
+    setStatus(false, 'connecting…'); // turns green on the first real message (noteData)
     reconnectDelay = 1000; // reset backoff on a clean connect
     wsFailCount = 0;
     if (everConnected) resyncHistory(); // reconnect after a drop — backfill any gap
     everConnected = true;
   };
   ws.onclose = (e) => {
+    if (state.ws !== ws) return; // stale socket from a previous symbol/timeframe — ignore
     wsFailCount++;
     const secs = Math.round(reconnectDelay/1000);
     // After repeated WS failures (common when a network/ISP blocks the Binance WebSocket
@@ -708,12 +783,14 @@ function connectWS(){
     reconnectTimer = setTimeout(()=>{ if(state.ws===ws) connectWS(); }, reconnectDelay);
     reconnectDelay = Math.min(15000, Math.round(reconnectDelay*1.6)); // exponential backoff, capped at 15s
   };
-  ws.onerror = () => { if (!pollTimer) setStatus(false, 'ws error'); };
+  ws.onerror = () => { if (state.ws === ws && !pollTimer) setStatus(false, 'ws error'); };
   ws.onmessage = (msg) => {
+    if (state.ws !== ws) return;
     let data;
     try { data = JSON.parse(msg.data); } catch(e){ return; }
     const k = data.k;
     if (!k) return;
+    noteData();
     const bar = { t:k.t, o:+k.o, h:+k.h, l:+k.l, c:+k.c, v:+k.v, closed:k.x };
     const arr = state.baseCandles;
     const last = arr[arr.length-1];
@@ -740,7 +817,7 @@ function connectWS(){
 // Binance's own UI does for 1s charts. No historical backfill is possible this way — bars
 // accumulate live, starting from whenever the chart was opened.
 function connectAggTradeWS(){
-  if (state.ws){ try{ state.ws.close(); }catch(e){} state.ws = null; }
+  dropWS(state.ws); state.ws = null;
   if (reconnectTimer){ clearTimeout(reconnectTimer); reconnectTimer=null; }
   const sym = apiSymbol(state.symbol).toLowerCase();
   const tradeType = marketFor(state.symbol)==='futures' ? 'aggTrade' : 'trade';
@@ -753,15 +830,18 @@ function connectAggTradeWS(){
   const bucketMs = 1000;
 
   ws.onopen = () => {
+    if (state.ws !== ws) return;
     stopPollFallback();
     state.baseInterval = '1s'; // first live trade bucket is genuinely 1s-granular from here on
     state.tickRenko = true;
-    setStatus(true, `live: ${displaySymbol(state.symbol)} @ ${state.tf}`);
+    openAt = Date.now(); lastDataAt = 0;
+    setStatus(false, 'connecting…'); // turns green on the first real trade (noteData via onTick)
     reconnectDelay = 1000;
     wsFailCount = 0;
     everConnected = true;
   };
   ws.onclose = (e) => {
+    if (state.ws !== ws) return; // stale socket from a previous symbol/timeframe — ignore
     state.tickRenko = false;
     wsFailCount++;
     const secs = Math.round(reconnectDelay/1000);
@@ -773,8 +853,9 @@ function connectAggTradeWS(){
     reconnectTimer = setTimeout(()=>{ if(state.ws===ws) connectAggTradeWS(); }, reconnectDelay);
     reconnectDelay = Math.min(15000, Math.round(reconnectDelay*1.6));
   };
-  ws.onerror = () => { if (!pollTimer) setStatus(false, 'ws error'); };
+  ws.onerror = () => { if (state.ws === ws && !pollTimer) setStatus(false, 'ws error'); };
   ws.onmessage = (msg) => {
+    if (state.ws !== ws) return;
     let data;
     try { data = JSON.parse(msg.data); } catch(e){ return; }
     const price = +data.p, qty = +data.q, t = data.T || data.E;
@@ -2447,9 +2528,16 @@ function fmtDateTimeIST(ts){
 }
 function setStatus(live, text){
   state.wsConnected = live;
-  document.getElementById('ledDot').classList.toggle('live', live);
-  const fsDot = document.getElementById('ledDotFs');
-  if (fsDot) fsDot.classList.toggle('live', live);
+  // live = green | connecting/loading = amber | everything else = red (offline)
+  const mode = live ? 'live' : (/^(loading|connecting)/i.test(text||'') ? 'loading' : 'offline');
+  ['ledDot','ledDotFs'].forEach(id=>{
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.classList.toggle('live', mode==='live');
+    el.classList.toggle('loading', mode==='loading');
+    if (mode!=='live') el.classList.remove('tick');
+    el.title = text || mode;
+  });
 }
 // Banner UI removed per request — kept as a no-op so existing showBanner(...) call sites
 // elsewhere don't need to be touched.
@@ -2481,20 +2569,103 @@ function buildTfSelect(){
   }
 }
 
+const PINNED_SYMBOLS = ['BTCUSDT.P','ETHUSDT.P','SOLUSDT.P','BNBUSDT.P','XRPUSDT.P','DOGEUSDT.P','XAUUSDT.P','XAGUSDT.P'];
 function currentSymbolList(){
-  return Object.keys(CFG.symbolMarket);
+  const all = Object.keys(CFG.symbolMarket);
+  const pinned = PINNED_SYMBOLS.filter(s => CFG.symbolMarket[s]);
+  const rest = all.filter(s => !PINNED_SYMBOLS.includes(s)).sort();
+  return pinned.concat(rest);
+}
+function updateSymbolButton(){
+  const b = document.getElementById('btnSymbol');
+  if (b) b.textContent = state.symbol + ' ▾';
 }
 function buildSymbolSelect(){
   const sel = document.getElementById('symbolSelect');
   const list = currentSymbolList();
   sel.innerHTML = list.map(s => `<option value="${s}">${displaySymbol(s)}</option>`).join('');
+  sel.value = state.symbol;
+  updateSymbolButton();
+  renderSymbolList();
+}
+// ----- searchable picker (hundreds of perps don't fit a native dropdown) -----
+function renderSymbolList(){
+  const box = document.getElementById('symList'); if (!box) return;
+  const q = (document.getElementById('symSearch').value || '').trim().toUpperCase();
+  const all = currentSymbolList();
+  const hits = q ? all.filter(s => s.includes(q)) : all;
+  const shown = hits.slice(0, 400);
+  document.getElementById('symCount').textContent = `${hits.length} perpetual futures` + (hits.length>shown.length ? ' — type to narrow down' : '');
+  box.innerHTML = shown.map(s => `<div class="symRow${s===state.symbol?' sel':''}" data-sym="${s}"><span>${s.replace(/\.P$/,'')}</span><small>Perp</small></div>`).join('')
+    || '<div class="symRow">No match</div>';
+}
+function openSymbolPicker(){
+  const pk = document.getElementById('symPicker');
+  pk.classList.add('open');
+  const inp = document.getElementById('symSearch'); inp.value = '';
+  renderSymbolList();
+  setTimeout(()=>inp.focus(), 50);
+}
+function closeSymbolPicker(){ document.getElementById('symPicker').classList.remove('open'); }
+function bindSymbolPicker(){
+  document.getElementById('btnSymbol').onclick = openSymbolPicker;
+  document.getElementById('symSearch').oninput = renderSymbolList;
+  document.getElementById('symPicker').addEventListener('click', e=>{
+    if (e.target.id === 'symPicker'){ closeSymbolPicker(); return; }
+    const row = e.target.closest('.symRow');
+    if (!row || !row.dataset.sym) return;
+    closeSymbolPicker();
+    const sel = document.getElementById('symbolSelect');
+    if (sel.value !== row.dataset.sym){
+      sel.value = row.dataset.sym;
+      sel.onchange({ target: sel });
+    }
+  });
+}
+// ----- full perpetual list from Binance (cached 6h) -----
+const SYM_CACHE_KEY = 'ankit_fut_perps_v1';
+function applySymbolList(bases){
+  bases.forEach(b => { CFG.symbolMarket[b + '.P'] = 'futures'; });
+}
+function primeSymbolsFromCache(){
+  try{
+    const c = JSON.parse(localStorage.getItem(SYM_CACHE_KEY) || 'null');
+    if (c && Array.isArray(c.list) && c.list.length > 50) applySymbolList(c.list);
+  } catch(e){}
+}
+async function refreshSymbolsFromBinance(){
+  try{
+    let c = null;
+    try{ c = JSON.parse(localStorage.getItem(SYM_CACHE_KEY) || 'null'); }catch(e){}
+    if (c && Date.now() - c.t < 6*3600*1000 && c.list && c.list.length > 50) return; // fresh cache already applied
+    const res = await fetch(CFG.futuresRestBase + '/fapi/v1/exchangeInfo');
+    if (!res.ok) throw new Error('exchangeInfo ' + res.status);
+    const info = await res.json();
+    // every live perpetual contract (USDT-M and USDC-M, incl. TradFi perps); quarterly/delivery contracts skipped
+    const list = (info.symbols || [])
+      .filter(x => /PERPETUAL/.test(x.contractType || '') && x.status === 'TRADING')
+      .map(x => x.symbol);
+    if (list.length < 50) return;
+    try{ localStorage.setItem(SYM_CACHE_KEY, JSON.stringify({ t: Date.now(), list })); }catch(e){}
+    applySymbolList(list);
+    buildSymbolSelect();
+    // saved symbol got delisted -> fall back to BTC instead of a dead chart
+    if (!list.includes(apiSymbol(state.symbol))){
+      state.symbol = 'BTCUSDT.P';
+      document.getElementById('symbolSelect').value = state.symbol;
+      updateSymbolButton(); saveLayout();
+      await loadSymbolAndTf();
+    }
+  } catch(e){ console.warn('could not load full perpetual list — using built-in list', e); }
 }
 function bindUI(){
   buildTfSelect();
   buildSymbolSelect();
+  bindSymbolPicker();
 
   document.getElementById('symbolSelect').onchange = async e=>{
     state.symbol = e.target.value;
+    updateSymbolButton();
     saveLayout();
     await loadSymbolAndTf();
   };
@@ -2833,6 +3004,7 @@ let loadGeneration = 0;
 async function loadSymbolAndTf(){
   await applyAtrRenkoSizing(); // symbol-specific box sizing must be in place before bricks are built below
   state.livePrice = null; state.tickRenko = false; closeTickWS();
+  lastDataAt = 0; openAt = 0;
   setStatus(false, 'loading history…');
   // Sub-minute (1s) history can take 90 sequential REST pages — rather than leaving the chart
   // blank for the whole fetch, redraw with whatever history has arrived after every page. Each
@@ -2935,7 +3107,12 @@ function loadLayout(){
     const raw = localStorage.getItem(LAYOUT_KEY);
     if (!raw) return;
     const saved = JSON.parse(raw);
-    if (saved.symbol && CFG.symbolMarket[saved.symbol]) state.symbol = saved.symbol;
+    if (saved.symbol){
+      // old saves held spot symbols (BTCUSDT) or XAUUSDT without ".P" — everything is futures now
+      let sy = String(saved.symbol).toUpperCase();
+      if (!sy.endsWith('.P')) sy += '.P';
+      if (/^[A-Z0-9_]+\.P$/.test(sy)){ CFG.symbolMarket[sy] = 'futures'; state.symbol = sy; }
+    }
     if (saved.tf) state.tf = saved.tf;
     // chartType intentionally not restored — this build is renko-only.
     if (typeof saved.renkoOverlay==='boolean') state.renkoOverlay = saved.renkoOverlay;
@@ -2949,6 +3126,7 @@ function loadLayout(){
 }
 function syncUIFromState(){
   document.getElementById('symbolSelect').value = state.symbol;
+  updateSymbolButton();
   document.getElementById('tfSelect').value = state.tf;
   document.getElementById('btnRenkoLine').classList.toggle('active', state.renkoOverlay);
   document.getElementById('btnST').classList.toggle('active', !!state.indicators.supertrend);
@@ -2990,10 +3168,12 @@ function syncUIFromState(){
 }
 
 window.addEventListener('DOMContentLoaded', async ()=>{
+  primeSymbolsFromCache();
   loadLayout();
   Render.init();
   bindUI();
   syncUIFromState();
+  refreshSymbolsFromBinance(); // fills the picker with every perpetual (runs alongside the first chart load)
   await loadSymbolAndTf();
 });
 
