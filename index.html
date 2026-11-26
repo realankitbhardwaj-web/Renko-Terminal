@@ -39,10 +39,9 @@ html,body{margin:0;padding:0;height:100%;background:var(--bg);color:var(--text);
 .led{width:11px;height:11px;border-radius:50%;background:var(--red); box-shadow:0 0 8px var(--red); display:inline-block; animation:ledBlink .7s ease-in-out infinite;}
 /* offline = red, fast blink | connecting/loading = amber, slow blink | live = solid green (pulses on every incoming tick) */
 .led.loading{background:#f5a623; box-shadow:0 0 8px #f5a623; animation:ledBlink 1.2s ease-in-out infinite;}
-.led.live{background:var(--green); box-shadow:0 0 8px var(--green); animation:none; opacity:1;}
-.led.live.tick{animation:ledTick .3s ease-out;}
+.led.live{background:var(--green); box-shadow:0 0 8px var(--green); animation:ledLive 1.6s ease-in-out infinite;} /* steady, continuous breathing — independent of tick timing */
 @keyframes ledBlink{0%,100%{opacity:1;} 50%{opacity:.25;}}
-@keyframes ledTick{0%{transform:scale(1.6); opacity:.65;} 100%{transform:scale(1); opacity:1;}}
+@keyframes ledLive{0%,100%{opacity:1; box-shadow:0 0 9px var(--green);} 50%{opacity:.35; box-shadow:0 0 2px var(--green);}}
 #btnSymbol{font-weight:700; letter-spacing:.3px;}
 #colPal{position:fixed; inset:0; z-index:10001; display:none; align-items:center; justify-content:center; background:rgba(0,0,0,.35);}
 #colPal.open{display:flex;}
@@ -626,7 +625,6 @@ function noteData(){
   const now = Date.now();
   lastDataAt = now;
   if (!state.wsConnected) setStatus(true, `live: ${displaySymbol(state.symbol)} @ ${state.tf}`);
-  if (now - lastFlashAt > 400){ lastFlashAt = now; flashLeds(); }
 }
 async function feedWatchdog(){
   if (watchdogBusy) return;
