@@ -201,8 +201,6 @@ canvas{display:block; touch-action:none;}
       <div id="indicatorDropdown" class="dropdown-panel hidden">
         <button class="chip-btn active" id="btnST">Supertrend</button>
         <button class="chip-btn" id="btnRenkoLine">Renko Line</button>
-        <button class="chip-btn" id="btnAlligator">Alligator</button>
-        <button class="chip-btn" id="btnFractals">Fractals</button>
         <button class="chip-btn" id="btnEMA">EMA</button>
         <button class="chip-btn" id="btnSessionBreaks">Session Breaks</button>
       </div>
@@ -248,23 +246,6 @@ canvas{display:block; touch-action:none;}
       <select id="stLineStyle"><option value="solid">Solid</option><option value="dashed">Dashed</option><option value="dotted">Dotted</option></select>
     </div>
 
-    <h4>Alligator (Williams)</h4>
-    <div class="row">Jaw Length <input type="number" id="alJawLen" value="13" min="1" step="1"></div>
-    <div class="row">Jaw Offset <input type="number" id="alJawOff" value="8" min="0" step="1"></div>
-    <div class="row">Teeth Length <input type="number" id="alTeethLen" value="8" min="1" step="1"></div>
-    <div class="row">Teeth Offset <input type="number" id="alTeethOff" value="5" min="0" step="1"></div>
-    <div class="row">Lips Length <input type="number" id="alLipsLen" value="5" min="1" step="1"></div>
-    <div class="row">Lips Offset <input type="number" id="alLipsOff" value="3" min="0" step="1"></div>
-    <div class="row">Jaw Color <input type="color" id="colorAlJaw" value="#2962ff"></div>
-    <div class="row">Teeth Color <input type="color" id="colorAlTeeth" value="#e91e63"></div>
-    <div class="row">Lips Color <input type="color" id="colorAlLips" value="#66bb6a"></div>
-    <div class="row">Line Thickness <input type="number" id="alLineWidth" value="1.5" step="0.2" min="0.5" max="6"></div>
-
-    <h4>Fractals (Williams)</h4>
-    <div class="row">Periods (bars each side) <input type="number" id="frN" value="2" min="1" max="10" step="1"></div>
-    <div class="row">Up Fractal Color <input type="color" id="colorFrUp" value="#f23645"></div>
-    <div class="row">Down Fractal Color <input type="color" id="colorFrDown" value="#089981"></div>
-
     <h4>EMA (trend)</h4>
     <div style="font-size:11px; color:var(--muted); padding:2px 0 6px;">Up to 4 EMA lines — untick "On" to hide a line without losing its period/color.</div>
     <div class="row">EMA 1 On <input type="checkbox" id="ema0On" checked></div>
@@ -291,6 +272,9 @@ canvas{display:block; touch-action:none;}
     <div class="row">Fill when EMA 1 above <input type="color" id="colorEmaFillUp" value="#089981"></div>
     <div class="row">Fill when EMA 1 below <input type="color" id="colorEmaFillDown" value="#f23645"></div>
     <div class="row">Fill Opacity % <input type="number" id="emaFillOpacity" value="20" min="0" max="100" step="5"></div>
+    <div class="row">Buy/Sell signal on EMA 1 &amp; EMA 2 cross <input type="checkbox" id="emaSignalOn" checked></div>
+    <div class="row">Buy Signal Color <input type="color" id="colorEmaBuy" value="#089981"></div>
+    <div class="row">Sell Signal Color <input type="color" id="colorEmaSell" value="#f23645"></div>
 
     <h4>Session Breaks</h4>
     <div style="font-size:11px; color:var(--muted); padding:2px 0 6px;">Vertical dashed line every N hours, plus any custom daily times you add below. All times are IST (India Standard Time).</div>
@@ -304,7 +288,8 @@ canvas{display:block; touch-action:none;}
     <div class="row">Dark Mode <input type="checkbox" id="darkModeToggle"></div>
     <div class="row">Up Color <input type="color" id="colorUp" value="#089981"></div>
     <div class="row">Down Color <input type="color" id="colorDown" value="#f23645"></div>
-    <div class="row">Renko Line Color <input type="color" id="colorRenkoLine" value="#2962ff"></div>
+    <div class="row">Renko Line Up Color (brick closes up) <input type="color" id="colorRenkoLine" value="#2962ff"></div>
+    <div class="row">Renko Line Down Color (brick closes down) <input type="color" id="colorRenkoLineDown" value="#ff9800"></div>
     <div class="row">Drawing Line Color (H/V lines) <input type="color" id="colorDrawLine" value="#f5a623"></div>
     <div class="row">Renko Line Thickness <input type="number" id="lineWidth" value="1.6" step="0.2" min="0.5" max="6"></div>
     <div class="row">Renko Line Style
@@ -415,8 +400,6 @@ const state = {
     emaOn: false,
     ema: [ { period:9, color:'#f5a623', on:true, width:1.3, style:'solid' }, { period:20, color:'#3b82f6', on:true, width:1.3, style:'solid' }, { period:50, color:'#a78bfa', on:true, width:1.3, style:'solid' }, { period:200, color:'#dc2626', on:true, width:1.3, style:'solid' } ],
     ichimoku: false,
-    alligator: false,
-    fractals: false,
     zlema: false,
     reversalZones: false,
     breakoutStats: false,
@@ -428,15 +411,14 @@ const state = {
     rlMode: 'pct', rlSize: 0.1,                        // Renko LINE overlay (RenkoEngine) box size — independent of the chart above
     boxAtrPeriod: 7, boxDivisor: 46, rlDivisor: 12,                  // ATR-daily auto box-sizing: Renko Line = ATR(period)-daily, Renko brick = that / divisor
     zlSource: 'hlc3', zlPeriod: 55,                    // period3 default 55
-    alJawLen: 13, alJawOff: 8, alTeethLen: 8, alTeethOff: 5, alLipsLen: 5, alLipsOff: 3, alLineWidth: 1.5, // Williams Alligator (SMMA of hl2, forward-shifted)
-    frN: 2,                                            // Williams Fractals — bars each side
     emaFillOn: false, emaFillOpacity: 20,              // shaded area between EMA 1 and EMA 2
+    emaSignalOn: true,                                 // BUY / SELL markers where EMA 1 crosses EMA 2
     ichiConv: 9, ichiBase: 26, ichiSpanB: 52, ichiDisplacement: 26,
     rzPct: 0.015, rzAbs: 0.05, rzAtrMult: 2.8, rzAvgLen: 5, rzAtrLen: 5, // presetPct/presetATR/customAbs/avgLen/atrLen (Low preset)
     rzLevelExtend: 10,                                 // levelExtend — how many bars the core/outer boxes extend right
     stPeriod: 10, stMult: 3.0, stSource: 'close',       // classic Supertrend defaults
     boLookback: 20, boSample: 200,
-    colors: { up: '#089981', down: '#f23645', renkoLine: '#2962ff', alJaw: '#2962ff', alTeeth: '#e91e63', alLips: '#66bb6a', frUp: '#f23645', frDown: '#089981', emaFillUp: '#089981', emaFillDown: '#f23645', drawLine: '#f5a623', sessionBreak: '#787b86' }, // user-customizable chart colors
+    colors: { up: '#089981', down: '#f23645', renkoLine: '#2962ff', renkoLineDown: '#ff9800', emaFillUp: '#089981', emaFillDown: '#f23645', emaBuy: '#089981', emaSell: '#f23645', drawLine: '#f5a623', sessionBreak: '#787b86' }, // user-customizable chart colors
     sbIntervalHours: 1, // session-break vertical line every N hours (only used when sbIntervalEnabled is true)
     sbIntervalEnabled: true, // turn the N-hour interval lines on/off independently of custom times
     sbCustomTimes: [], // extra daily times, "HH:MM" 24h local, e.g. ["09:15","15:30"]
@@ -1150,8 +1132,6 @@ const Indicators = {
   emaRenko: {},   // period -> array (Renko-brick-close-based)
   kalmanZlema: { kv1:[], kv2:[], kv3:[], zlema:[], color:[] },
   ichimoku: { conv:[], base:[], spanA:[], spanB:[] },
-  alligator: { jaw:[], teeth:[], lips:[] },   // SMMA(hl2) on Renko bricks, full-array indexed (offset applied at draw time)
-  fractals: { up:[], down:[] },               // brick indices where a confirmed up / down fractal sits
   supertrend: { line:[], dir:[] },
   supertrendRenko: { line:[], dir:[] },
   reversalZones: { events:[], status:'idle', lastType:null, lastPrice:null, lastBar:null },
@@ -1170,8 +1150,6 @@ const Indicators = {
     if (ind.emaOn){ this.computeEMA(c); this.computeEMAOnRenkoBricks(state.classicRenkoBricks); }
     if (ind.zlema) this.computeKalmanZlema(c);
     if (ind.ichimoku) this.computeIchimoku(c);
-    if (ind.alligator) this.computeAlligatorOnRenkoBricks(state.classicRenkoBricks);
-    if (ind.fractals) this.computeFractalsOnRenkoBricks(state.classicRenkoBricks);
     if (ind.supertrend){
       this.atr = atrSeries(c, 14);
       this.computeSupertrend(c);
@@ -1301,48 +1279,6 @@ const Indicators = {
     }
     // Pine offset=ichi_displacement-1 (offset is 0-based bar shift), default displacement=26 -> offset 25
     this.ichimoku = { conv, base, spanA, spanB, displacement: (state.settings.ichiDisplacement||26) - 1 };
-  },
-
-  // ---- Williams Alligator: Jaw/Teeth/Lips = SMMA (Wilder/RMA) of hl2 over 13/8/5 bars, plotted
-  // shifted forward 8/5/3 bars. Computed straight off the Renko brick sequence (hl2 of a brick = (open+close)/2).
-  smmaSeries(src, len){
-    const n = src.length, out = new Array(n).fill(null);
-    if (n < len || len < 1) return out;
-    let sum = 0;
-    for (let i=0;i<len;i++) sum += src[i];
-    out[len-1] = sum / len;
-    for (let i=len;i<n;i++) out[i] = (out[i-1]*(len-1) + src[i]) / len;
-    return out;
-  },
-  computeAlligatorOnRenkoBricks(bricks){
-    if (!bricks.length){ this.alligator = { jaw:[], teeth:[], lips:[] }; return; }
-    const hl2 = bricks.map(b => (b.o + b.c) / 2);
-    const st = state.settings;
-    this.alligator = {
-      jaw:   this.smmaSeries(hl2, st.alJawLen   || 13),
-      teeth: this.smmaSeries(hl2, st.alTeethLen || 8),
-      lips:  this.smmaSeries(hl2, st.alLipsLen  || 5)
-    };
-  },
-  // ---- Williams Fractals: bar i is an up fractal when its high is above the n bars on its left
-  // and not below the n bars on its right (ties allowed on the right so flat Renko tops still
-  // register once); mirrored for down fractals. Confirmed only after n further bricks have formed.
-  computeFractalsOnRenkoBricks(bricks){
-    const n = bricks.length, N = Math.max(1, Math.round(state.settings.frN || 2));
-    const up = [], down = [];
-    for (let i=N;i<n-N;i++){
-      const hi = Math.max(bricks[i].o, bricks[i].c), lo = Math.min(bricks[i].o, bricks[i].c);
-      let isUp = true, isDn = true;
-      for (let k=1;k<=N && (isUp||isDn);k++){
-        const lh = Math.max(bricks[i-k].o, bricks[i-k].c), ll = Math.min(bricks[i-k].o, bricks[i-k].c);
-        const rh = Math.max(bricks[i+k].o, bricks[i+k].c), rl = Math.min(bricks[i+k].o, bricks[i+k].c);
-        if (!(hi > lh && hi >= rh)) isUp = false;
-        if (!(lo < ll && lo <= rl)) isDn = false;
-      }
-      if (isUp) up.push(i);
-      if (isDn) down.push(i);
-    }
-    this.fractals = { up, down };
   },
 
   // ---- Classic Supertrend (ATR bands + trailing flip) ----
@@ -1836,11 +1772,9 @@ const Render = {
       this.drawRenko(ctx, visible, startIdx, xToPx, yToPx, renderPxPerBar);
       if (state.renkoOverlay) this.drawPriceLineOnRenko(ctx, visible, startIdx, xToPx, yToPx);
       if (state.indicators.emaOn) Overlays.drawEMAOnRenko(ctx, visible, startIdx, endIdx, xToPx, yToPx);
-      if (state.indicators.alligator) Overlays.drawAlligatorOnRenko(ctx, visible, startIdx, endIdx, xToPx, yToPx);
       if (state.indicators.supertrend) Overlays.drawSupertrendOnRenko(ctx, visible, startIdx, endIdx, xToPx, yToPx);
       if (state.indicators.zlema) Overlays.drawZlemaOnRenko(ctx, visible, startIdx, endIdx, xToPx, yToPx);
       if (state.indicators.reversalZones) Overlays.drawReversalZonesOnRenko(ctx, startIdx, endIdx, xToPx, yToPx);
-      if (state.indicators.fractals) Overlays.drawFractalsOnRenko(ctx, visible, startIdx, endIdx, xToPx, yToPx);
     } else {
       // background cloud/band fills drawn BEHIND the candles so wicks/bodies stay visible
       if (state.indicators.ichimoku) Overlays.drawIchimokuBg(ctx, startIdx, endIdx, xToPx, yToPx);
@@ -2030,19 +1964,40 @@ const Render = {
   drawPriceLineOnRenko(ctx, bricks, startIdx, xToPx, yToPx){
     const lineBricks = state.renkoBricks;
     if (!lineBricks.length || !bricks.length) return;
-    ctx.strokeStyle = state.settings.colors.renkoLine; applyLineStyle(ctx);
-    let prevX=null, prevY=null;
-    bricks.forEach((b,k)=>{
-      const i = startIdx+k;
-      const li = nearestBrickIndex(b.t);
-      const lb = lineBricks[li]; if (!lb) return;
-      const x = xToPx(i), y = yToPx(lb.c);
-      if (prevX!=null){
-        ctx.beginPath(); ctx.moveTo(prevX,prevY); ctx.lineTo(x,prevY); ctx.lineTo(x,y); ctx.stroke();
-      }
-      prevX=x; prevY=y;
-    });
-    ctx.setLineDash([]);
+    const cUp = state.settings.colors.renkoLine || '#2962ff', cDn = state.settings.colors.renkoLineDown || '#ff9800';
+    const n = bricks.length, lastT = bricks[n-1].t;
+    // The Renko Line has its own bricks (own box size, own timestamps). Each one is placed at the
+    // x position of its real time — which can fall BETWEEN two chart bricks — so the step and the
+    // colour change happen exactly where the line brick closed, not at the next chart brick.
+    let j = 0;
+    const xAtTime = (t) => {
+      while (j+1 < n && bricks[j+1].t <= t) j++;
+      const xj = xToPx(startIdx + j);
+      if (j+1 >= n) return xj;
+      const t0 = bricks[j].t, t1 = bricks[j+1].t;
+      if (t <= t0 || t1 <= t0) return xj;
+      return xj + (xToPx(startIdx + j + 1) - xj) * (t - t0) / (t1 - t0);
+    };
+    let prevCol = cUp;
+    const colorOf = (lb) => lb.dir > 0 ? cUp : (lb.dir < 0 ? cDn : prevCol); // dir 0 (seed brick) inherits
+    let li = nearestBrickIndex(bricks[0].t);
+    if (!lineBricks[li]) return;
+    let prevX = xToPx(startIdx), prevY = yToPx(lineBricks[li].c);
+    prevCol = colorOf(lineBricks[li]);
+    ctx.save();
+    applyLineStyle(ctx);
+    while (li+1 < lineBricks.length && lineBricks[li+1].t <= lastT){
+      li++;
+      const lb = lineBricks[li];
+      const x = Math.max(prevX, xAtTime(lb.t)), y = yToPx(lb.c), col = colorOf(lb);
+      // flat part keeps the colour of the brick we were on; from the closing point the step takes the new brick's colour
+      ctx.strokeStyle = prevCol; ctx.beginPath(); ctx.moveTo(prevX, prevY); ctx.lineTo(x, prevY); ctx.stroke();
+      if (y !== prevY){ ctx.strokeStyle = col; ctx.beginPath(); ctx.moveTo(x, prevY); ctx.lineTo(x, y); ctx.stroke(); }
+      prevX = x; prevY = y; prevCol = col;
+    }
+    const endX = xToPx(startIdx + n - 1);
+    if (endX > prevX){ ctx.strokeStyle = prevCol; ctx.beginPath(); ctx.moveTo(prevX, prevY); ctx.lineTo(endX, prevY); ctx.stroke(); }
+    ctx.restore();
   },
 
   drawPriceScale(ctx, min, max, yToPx, lastPrice){
@@ -2159,6 +2114,42 @@ const Overlays = {
       ctx.stroke();
       ctx.restore();
     }
+    // ---- BUY / SELL where EMA 1 crosses EMA 2 ----
+    if (st.emaSignalOn !== false && emas[0] && emas[1] && emas[0].on !== false && emas[1].on !== false){
+      const A = Indicators.emaRenko[emas[0].period], B = Indicators.emaRenko[emas[1].period];
+      if (A && B){
+        const col = st.colors, sz = Math.max(4, Math.min(7, state.pxPerBar * 0.5));
+        ctx.save();
+        ctx.font = 'bold 10px sans-serif'; ctx.textAlign = 'center';
+        // sign of (EMA1 - EMA2) on the last bar where it was not exactly zero, so a touch-and-go is not a cross
+        const signAt = (i) => {
+          for (let k=i, n=0; k>=0 && n<12; k--, n++){
+            if (A[k]==null || B[k]==null) return 0;
+            const d = A[k]-B[k]; if (d > 0) return 1; if (d < 0) return -1;
+          }
+          return 0;
+        };
+        for (let i=Math.max(startIdx,1);i<=endIdx;i++){
+          if (A[i]==null || B[i]==null) continue;
+          const s1 = signAt(i); if (!s1) continue;
+          const s0 = signAt(i-1); if (!s0 || s0 === s1) continue;
+          const b = bricks[i - startIdx]; if (!b) continue;
+          const x = xToPx(i);
+          if (s1 > 0){ // EMA 1 crossed above EMA 2 -> BUY, marker under the brick
+            const y = yToPx(Math.min(b.o, b.c)) + 6;
+            ctx.fillStyle = col.emaBuy;
+            ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x - sz, y + sz*1.5); ctx.lineTo(x + sz, y + sz*1.5); ctx.closePath(); ctx.fill();
+            ctx.fillText('BUY', x, y + sz*1.5 + 11);
+          } else {     // EMA 1 crossed below EMA 2 -> SELL, marker above the brick
+            const y = yToPx(Math.max(b.o, b.c)) - 6;
+            ctx.fillStyle = col.emaSell;
+            ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x - sz, y - sz*1.5); ctx.lineTo(x + sz, y - sz*1.5); ctx.closePath(); ctx.fill();
+            ctx.fillText('SELL', x, y - sz*1.5 - 4);
+          }
+        }
+        ctx.restore();
+      }
+    }
   },
   drawIchimokuBg(ctx, startIdx, endIdx, xToPx, yToPx){
     // Classic Ichimoku Kumo — forward-displaced (offset = displacement-1 = 25 bars).
@@ -2183,52 +2174,6 @@ const Overlays = {
         segStart = i; segBull = bull;
       }
     }
-  },
-
-  // ---- Williams Alligator on Renko bricks: value computed at brick j is drawn `offset` bricks to
-  // the right, so on screen index i shows arr[i - offset]. (The forward-projected tail beyond the
-  // newest brick would fall outside the plot, so lines stop at the newest brick.)
-  drawAlligatorOnRenko(ctx, bricks, startIdx, endIdx, xToPx, yToPx){
-    const al = Indicators.alligator, st = state.settings;
-    const lines = [
-      { arr: al.jaw,   off: st.alJawOff   || 0, color: st.colors.alJaw },
-      { arr: al.teeth, off: st.alTeethOff || 0, color: st.colors.alTeeth },
-      { arr: al.lips,  off: st.alLipsOff  || 0, color: st.colors.alLips }
-    ];
-    ctx.save();
-    ctx.setLineDash([]); ctx.lineWidth = st.alLineWidth || 1.5; ctx.lineJoin = 'round';
-    for (const L of lines){
-      if (!L.arr || !L.arr.length) continue;
-      ctx.strokeStyle = L.color; ctx.beginPath(); let started = false;
-      for (let i=startIdx;i<=endIdx;i++){
-        const v = L.arr[i - L.off]; if (v==null){ continue; }
-        const x = xToPx(i), y = yToPx(v);
-        if (!started){ ctx.moveTo(x,y); started = true; } else ctx.lineTo(x,y);
-      }
-      ctx.stroke();
-    }
-    ctx.restore();
-  },
-  // ---- Williams Fractals on Renko bricks: triangle above the brick for up fractals, below for down fractals.
-  drawFractalsOnRenko(ctx, bricks, startIdx, endIdx, xToPx, yToPx){
-    const fr = Indicators.fractals, col = state.settings.colors;
-    const sz = Math.max(3, Math.min(6, state.pxPerBar * 0.45));
-    ctx.save();
-    ctx.fillStyle = col.frUp;
-    for (const i of fr.up){
-      if (i < startIdx || i > endIdx) continue;
-      const b = bricks[i - startIdx]; if (!b) continue;
-      const x = xToPx(i), y = yToPx(Math.max(b.o, b.c)) - 4;
-      ctx.beginPath(); ctx.moveTo(x, y - sz*1.4); ctx.lineTo(x - sz, y); ctx.lineTo(x + sz, y); ctx.closePath(); ctx.fill();
-    }
-    ctx.fillStyle = col.frDown;
-    for (const i of fr.down){
-      if (i < startIdx || i > endIdx) continue;
-      const b = bricks[i - startIdx]; if (!b) continue;
-      const x = xToPx(i), y = yToPx(Math.min(b.o, b.c)) + 4;
-      ctx.beginPath(); ctx.moveTo(x, y + sz*1.4); ctx.lineTo(x - sz, y); ctx.lineTo(x + sz, y); ctx.closePath(); ctx.fill();
-    }
-    ctx.restore();
   },
 
   drawZlema(ctx, startIdx, endIdx, xToPx, yToPx){
@@ -2708,7 +2653,7 @@ function bindUI(){
     Render.draw();
   };
   document.addEventListener('click', ()=>{ indicatorDropdown.classList.add('hidden'); drawDropdown.classList.add('hidden'); });
-  const toggleMap = { btnST:'supertrend', btnAlligator:'alligator', btnFractals:'fractals', btnEMA:'emaOn', btnSessionBreaks:'sessionBreaks' };
+  const toggleMap = { btnST:'supertrend', btnEMA:'emaOn', btnSessionBreaks:'sessionBreaks' };
   Object.entries(toggleMap).forEach(([btnId,key])=>{
     const btn = document.getElementById(btnId);
     if (!btn) return;
@@ -2735,7 +2680,6 @@ function bindUI(){
     rlMode:'rlMode', rlSize:'rlSize',
     boxAtrPeriod:'boxAtrPeriod', boxDivisor:'boxDivisor', rlDivisor:'rlDivisor',
     stPeriod:'stPeriod', stMult:'stMult', stSource:'stSource', stLineWidth:'stLineWidth', stLineStyle:'stLineStyle',
-    alJawLen:'alJawLen', alJawOff:'alJawOff', alTeethLen:'alTeethLen', alTeethOff:'alTeethOff', alLipsLen:'alLipsLen', alLipsOff:'alLipsOff', alLineWidth:'alLineWidth', frN:'frN',
     lineWidth:'lineWidth', lineStyle:'lineStyle'
   };
   Object.entries(settingsInputs).forEach(([elId,key])=>{
@@ -2788,6 +2732,8 @@ function bindUI(){
   // ---- fill between EMA 1 & EMA 2 ----
   const fOn = document.getElementById('emaFillOn'), fOp = document.getElementById('emaFillOpacity');
   if (fOn) fOn.onchange = ()=>{ state.settings.emaFillOn = fOn.checked; saveLayout(); Render.draw(); };
+  const sOn = document.getElementById('emaSignalOn');
+  if (sOn) sOn.onchange = ()=>{ state.settings.emaSignalOn = sOn.checked; saveLayout(); Render.draw(); };
   if (fOp) fOp.onchange = ()=>{ state.settings.emaFillOpacity = Math.max(0, Math.min(100, parseFloat(fOp.value) || 0)); saveLayout(); Render.draw(); };
 
   // ---- Session Breaks: interval hours + custom daily times ----
@@ -2842,7 +2788,7 @@ function bindUI(){
     saveLayout();
     Render.draw();
   };
-  const colorInputs = { colorUp:'up', colorDown:'down', colorRenkoLine:'renkoLine', colorDrawLine:'drawLine', colorAlJaw:'alJaw', colorAlTeeth:'alTeeth', colorAlLips:'alLips', colorFrUp:'frUp', colorFrDown:'frDown', colorEmaFillUp:'emaFillUp', colorEmaFillDown:'emaFillDown' };
+  const colorInputs = { colorUp:'up', colorDown:'down', colorRenkoLine:'renkoLine', colorDrawLine:'drawLine', colorRenkoLineDown:'renkoLineDown', colorEmaFillUp:'emaFillUp', colorEmaFillDown:'emaFillDown', colorEmaBuy:'emaBuy', colorEmaSell:'emaSell' };
   Object.entries(colorInputs).forEach(([elId,key])=>{
     document.getElementById(elId).onchange = e=>{
       state.settings.colors[key] = e.target.value;
@@ -2851,12 +2797,11 @@ function bindUI(){
     };
   });
   document.getElementById('btnResetColors').onclick = ()=>{
-    state.settings.colors = { up: '#089981', down: '#f23645', renkoLine: '#2962ff', alJaw: '#2962ff', alTeeth: '#e91e63', alLips: '#66bb6a', frUp: '#f23645', frDown: '#089981', emaFillUp: '#089981', emaFillDown: '#f23645' };
+    state.settings.colors = { up: '#089981', down: '#f23645', renkoLine: '#2962ff', renkoLineDown: '#ff9800', emaFillUp: '#089981', emaFillDown: '#f23645', emaBuy: '#089981', emaSell: '#f23645' };
     state.settings.lineWidth = 1.6; state.settings.lineStyle = 'solid';
     state.settings.stLineWidth = 1.8; state.settings.stLineStyle = 'solid';
-    state.settings.alLineWidth = 1.5;
     state.indicators.ema = [ { period:9, color:'#f5a623', on:true, width:1.3, style:'solid' }, { period:20, color:'#3b82f6', on:true, width:1.3, style:'solid' }, { period:50, color:'#a78bfa', on:true, width:1.3, style:'solid' }, { period:200, color:'#dc2626', on:true, width:1.3, style:'solid' } ];
-    state.settings.emaFillOn = false; state.settings.emaFillOpacity = 20;
+    state.settings.emaFillOn = false; state.settings.emaFillOpacity = 20; state.settings.emaSignalOn = true;
     syncUIFromState();
     saveLayout();
     Indicators.recompute();
@@ -3069,7 +3014,7 @@ function loadLayout(){
     // chartType intentionally not restored — this build is renko-only.
     if (typeof saved.renkoOverlay==='boolean') state.renkoOverlay = saved.renkoOverlay;
     if (typeof saved.yZoom==='number') state.yZoom = saved.yZoom;
-    if (saved.indicators){ const si = Object.assign({}, saved.indicators); delete si.superIchi; delete si.smc; Object.assign(state.indicators, si); }
+    if (saved.indicators){ const si = Object.assign({}, saved.indicators); delete si.superIchi; delete si.smc; delete si.alligator; delete si.fractals; Object.assign(state.indicators, si); }
     if (saved.settings) Object.assign(state.settings, saved.settings);
     if (saved.settings && saved.settings.colors) Object.assign(state.settings.colors, saved.settings.colors);
     if (saved.theme==='dark' || saved.theme==='light') state.theme = saved.theme;
@@ -3082,14 +3027,11 @@ function syncUIFromState(){
   document.getElementById('tfSelect').value = state.tf;
   document.getElementById('btnRenkoLine').classList.toggle('active', state.renkoOverlay);
   document.getElementById('btnST').classList.toggle('active', !!state.indicators.supertrend);
-  document.getElementById('btnAlligator').classList.toggle('active', !!state.indicators.alligator);
-  document.getElementById('btnFractals').classList.toggle('active', !!state.indicators.fractals);
   document.getElementById('btnEMA').classList.toggle('active', !!state.indicators.emaOn);
   document.getElementById('btnSessionBreaks').classList.toggle('active', !!state.indicators.sessionBreaks);
   const map = { renkoMode:'renkoMode', renkoSize:'renkoSize', rlMode:'rlMode', rlSize:'rlSize',
     boxAtrPeriod:'boxAtrPeriod', boxDivisor:'boxDivisor', rlDivisor:'rlDivisor',
     stPeriod:'stPeriod', stMult:'stMult', stSource:'stSource', stLineWidth:'stLineWidth', stLineStyle:'stLineStyle',
-    alJawLen:'alJawLen', alJawOff:'alJawOff', alTeethLen:'alTeethLen', alTeethOff:'alTeethOff', alLipsLen:'alLipsLen', alLipsOff:'alLipsOff', alLineWidth:'alLineWidth', frN:'frN',
     lineWidth:'lineWidth', lineStyle:'lineStyle' };
   Object.entries(map).forEach(([elId,key])=>{
     const el = document.getElementById(elId);
@@ -3102,15 +3044,14 @@ function syncUIFromState(){
   document.getElementById('sbIntervalHours').value = state.settings.sbIntervalHours;
   document.getElementById('sbIntervalEnabled').checked = state.settings.sbIntervalEnabled !== false;
   document.getElementById('sbColor').value = state.settings.colors.sessionBreak;
-  document.getElementById('colorAlJaw').value = state.settings.colors.alJaw;
-  document.getElementById('colorAlTeeth').value = state.settings.colors.alTeeth;
-  document.getElementById('colorAlLips').value = state.settings.colors.alLips;
-  document.getElementById('colorFrUp').value = state.settings.colors.frUp;
-  document.getElementById('colorFrDown').value = state.settings.colors.frDown;
+  document.getElementById('colorRenkoLineDown').value = state.settings.colors.renkoLineDown;
   document.getElementById('colorEmaFillUp').value = state.settings.colors.emaFillUp;
   document.getElementById('colorEmaFillDown').value = state.settings.colors.emaFillDown;
   document.getElementById('emaFillOn').checked = !!state.settings.emaFillOn;
   document.getElementById('emaFillOpacity').value = state.settings.emaFillOpacity;
+  document.getElementById('emaSignalOn').checked = state.settings.emaSignalOn !== false;
+  document.getElementById('colorEmaBuy').value = state.settings.colors.emaBuy;
+  document.getElementById('colorEmaSell').value = state.settings.colors.emaSell;
   state.indicators.ema.forEach((line, i)=>{
     const oEl = document.getElementById(`ema${i}On`), pEl = document.getElementById(`ema${i}Period`), cEl = document.getElementById(`ema${i}Color`);
     if (oEl) oEl.checked = line.on !== false;
