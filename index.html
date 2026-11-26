@@ -1964,37 +1964,62 @@ const Render = {
     if (!lineBricks.length || !bricks.length) return;
     const cUp = state.settings.colors.renkoLine || '#2962ff', cDn = state.settings.colors.renkoLineDown || '#ff9800';
     const n = bricks.length, lastT = bricks[n-1].t;
-    // The Renko Line has its own bricks (own box size, own timestamps). Each one is placed at the
-    // x position of its real time — which can fall BETWEEN two chart bricks — so the step and the
-    // colour change happen exactly where the line brick closed, not at the next chart brick.
+    const xs = bricks.map((_,k) => xToPx(startIdx + k));
+
+    // --- colour state per chart brick: closes ABOVE the Renko Line = blue, closes BELOW it = orange.
+    // The colour flips on the horizontal part of the line, exactly at the brick whose close crossed it.
+    const st = new Array(n);
+    for (let k=0;k<n;k++){
+      const lb = lineBricks[nearestBrickIndex(bricks[k].t)];
+      const d = lb ? bricks[k].c - lb.c : 0;
+      st[k] = d > 0 ? 1 : (d < 0 ? -1 : (k ? st[k-1] : 1)); // exactly on the line -> keep previous colour
+    }
+    let ci = 0;
+    const colAt = (x) => {              // colour that applies at pixel x (state of the last chart brick at or before x)
+      while (ci+1 < n && xs[ci+1] <= x) ci++;
+      while (ci > 0 && xs[ci] > x) ci--;
+      return st[ci] > 0 ? cUp : cDn;
+    };
+
+    // --- geometry: step line with each step placed at its real close time (can sit between chart bricks)
     let j = 0;
     const xAtTime = (t) => {
       while (j+1 < n && bricks[j+1].t <= t) j++;
-      const xj = xToPx(startIdx + j);
-      if (j+1 >= n) return xj;
+      if (j+1 >= n) return xs[j];
       const t0 = bricks[j].t, t1 = bricks[j+1].t;
-      if (t <= t0 || t1 <= t0) return xj;
-      return xj + (xToPx(startIdx + j + 1) - xj) * (t - t0) / (t1 - t0);
+      if (t <= t0 || t1 <= t0) return xs[j];
+      return xs[j] + (xs[j+1] - xs[j]) * (t - t0) / (t1 - t0);
     };
-    let prevCol = cUp;
-    const colorOf = (lb) => lb.dir > 0 ? cUp : (lb.dir < 0 ? cDn : prevCol); // dir 0 (seed brick) inherits
     let li = nearestBrickIndex(bricks[0].t);
     if (!lineBricks[li]) return;
-    let prevX = xToPx(startIdx), prevY = yToPx(lineBricks[li].c);
-    prevCol = colorOf(lineBricks[li]);
-    ctx.save();
-    applyLineStyle(ctx);
+    let prevX = xs[0], prevY = yToPx(lineBricks[li].c);
+    const pieces = [];                  // {h:true, x1, x2, y} or {h:false, x, y1, y2}
     while (li+1 < lineBricks.length && lineBricks[li+1].t <= lastT){
       li++;
-      const lb = lineBricks[li];
-      const x = Math.max(prevX, xAtTime(lb.t)), y = yToPx(lb.c), col = colorOf(lb);
-      // flat part keeps the colour of the brick we were on; from the closing point the step takes the new brick's colour
-      ctx.strokeStyle = prevCol; ctx.beginPath(); ctx.moveTo(prevX, prevY); ctx.lineTo(x, prevY); ctx.stroke();
-      if (y !== prevY){ ctx.strokeStyle = col; ctx.beginPath(); ctx.moveTo(x, prevY); ctx.lineTo(x, y); ctx.stroke(); }
-      prevX = x; prevY = y; prevCol = col;
+      const x = Math.max(prevX, xAtTime(lineBricks[li].t)), y = yToPx(lineBricks[li].c);
+      if (x > prevX) pieces.push({ h:true, x1:prevX, x2:x, y:prevY });
+      if (y !== prevY) pieces.push({ h:false, x, y1:prevY, y2:y });
+      prevX = x; prevY = y;
     }
-    const endX = xToPx(startIdx + n - 1);
-    if (endX > prevX){ ctx.strokeStyle = prevCol; ctx.beginPath(); ctx.moveTo(prevX, prevY); ctx.lineTo(endX, prevY); ctx.stroke(); }
+    if (xs[n-1] > prevX) pieces.push({ h:true, x1:prevX, x2:xs[n-1], y:prevY });
+
+    ctx.save();
+    applyLineStyle(ctx);
+    const seg = (col, x1, y1, x2, y2) => { ctx.strokeStyle = col; ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke(); };
+    for (const pc of pieces){
+      if (!pc.h){ seg(colAt(pc.x), pc.x, pc.y1, pc.x, pc.y2); continue; }
+      // horizontal piece: break it at every chart-brick position so the colour can change mid-line
+      let from = pc.x1;
+      for (let k=0;k<n;k++){
+        const bx = xs[k];
+        if (bx <= pc.x1 || bx >= pc.x2) continue;
+        if (st[k] !== st[Math.max(0,k-1)]){
+          seg(colAt((from + bx) / 2), from, pc.y, bx, pc.y);
+          from = bx;
+        }
+      }
+      seg(colAt((from + pc.x2) / 2), from, pc.y, pc.x2, pc.y);
+    }
     ctx.restore();
   },
 
